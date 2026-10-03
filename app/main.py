@@ -12,6 +12,8 @@ from app.models.request import ServiceRequest
 from app.routes.requests import router as requests_router
 from app.models.request_photo import RequestPhoto
 from fastapi.staticfiles import StaticFiles
+from app.routes.works import router as works_router
+
 
 Base.metadata.create_all(bind=engine)
 
@@ -46,7 +48,7 @@ app.include_router(auth_router)
 app.include_router(clients_router)
 app.include_router(services_router)
 app.include_router(requests_router) 
-
+app.include_router(works_router)
 
 @app.get("/")
 def root():

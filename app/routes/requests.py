@@ -16,6 +16,7 @@ from app.models.request import ServiceRequest
 from app.models.client import Client
 from app.models.service import Service
 from app.auth.dependencies import get_current_admin
+from app.models.work import Work
 
 
 router = APIRouter(
@@ -82,8 +83,6 @@ class RequestResponse(BaseModel):
 VALID_STATUSES = {
     "Pendiente",
     "Confirmada",
-    "En proceso",
-    "Completada",
     "Cancelada"
 }
 
@@ -506,6 +505,10 @@ def update_request(
 # CAMBIAR ESTADO
 # =========================================================
 
+# =========================================================
+# CAMBIAR ESTADO DE SOLICITUD
+# =========================================================
+
 @router.patch(
     "/{request_id}/status",
     response_model=RequestResponse
@@ -529,17 +532,55 @@ def update_request_status(
             detail="Solicitud no encontrada"
         )
 
+    # -----------------------------------------
+    # VALIDAR ESTADO
+    # -----------------------------------------
+
     if status_data.status not in VALID_STATUSES:
         raise HTTPException(
             status_code=400,
             detail=(
                 "Estado inválido. Estados permitidos: "
-                "Pendiente, Confirmada, En proceso, "
-                "Completada, Cancelada"
+                "Pendiente, Confirmada, Cancelada"
             )
         )
 
+    # -----------------------------------------
+    # ACTUALIZAR ESTADO DE SOLICITUD
+    # -----------------------------------------
+
     service_request.status = status_data.status
+
+    # -----------------------------------------
+    # SI SE CONFIRMA LA SOLICITUD,
+    # CREAR TRABAJO AUTOMÁTICAMENTE
+    # -----------------------------------------
+
+    if status_data.status == "Confirmada":
+
+        existing_work = (
+            db.query(Work)
+            .filter(
+                Work.request_id == service_request.id,
+                Work.is_active == True
+            )
+            .first()
+        )
+
+        # Evitar crear trabajos duplicados
+        if not existing_work:
+
+            work = Work(
+                request_id=service_request.id,
+                scheduled_date=service_request.requested_date,
+                assigned_to=None,
+                status="Programado",
+                price=service_request.estimated_price,
+                notes=service_request.notes,
+                is_active=True
+            )
+
+            db.add(work)
 
     db.commit()
     db.refresh(service_request)
