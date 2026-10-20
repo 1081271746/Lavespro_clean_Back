@@ -509,6 +509,10 @@ def update_request(
 # CAMBIAR ESTADO DE SOLICITUD
 # =========================================================
 
+# =========================================================
+# CAMBIAR ESTADO DE SOLICITUD
+# =========================================================
+
 @router.patch(
     "/{request_id}/status",
     response_model=RequestResponse
@@ -546,17 +550,26 @@ def update_request_status(
         )
 
     # -----------------------------------------
+    # GUARDAR ESTADO ANTERIOR
+    # -----------------------------------------
+
+    previous_status = service_request.status
+
+    # -----------------------------------------
     # ACTUALIZAR ESTADO DE SOLICITUD
     # -----------------------------------------
 
     service_request.status = status_data.status
 
     # -----------------------------------------
-    # SI SE CONFIRMA LA SOLICITUD,
+    # SI PASA DE PENDIENTE A CONFIRMADA,
     # CREAR TRABAJO AUTOMÁTICAMENTE
     # -----------------------------------------
 
-    if status_data.status == "Confirmada":
+    if (
+        status_data.status == "Confirmada"
+        and previous_status == "Pendiente"
+    ):
 
         existing_work = (
             db.query(Work)
@@ -582,10 +595,19 @@ def update_request_status(
 
             db.add(work)
 
+    # -----------------------------------------
+    # GUARDAR CAMBIOS
+    # -----------------------------------------
+
     db.commit()
     db.refresh(service_request)
 
     return service_request
+
+
+# =========================================================
+# SUBIR FOTOGRAFÍAS DE UNA SOLICITUD
+# =========================================================
 
 # =========================================================
 # SUBIR FOTOGRAFÍAS DE UNA SOLICITUD

@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Query
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
@@ -14,6 +14,16 @@ router = APIRouter(
     prefix="/works",
     tags=["Trabajos"]
 )
+
+# =========================
+# ENCARGADOS DISPONIBLES
+# =========================
+
+ENCARGADOS = [
+    "Juan Pablo Zarama",
+    "Mauricio Eraso",
+    "Vanessa Ceron"
+]
 
 
 # =========================
@@ -195,6 +205,106 @@ def get_works():
             })
 
         return result
+
+    finally:
+        db.close()
+
+        # =========================
+# CONSULTAR DISPONIBILIDAD
+# =========================
+
+@router.get("/availability")
+def get_availability(
+    scheduled_date: datetime = Query(...)
+):
+    db: Session = SessionLocal()
+
+    try:
+        # -----------------------------------------
+        # DETERMINAR LA JORNADA
+        # -----------------------------------------
+
+        if scheduled_date.hour < 12:
+            start_time = scheduled_date.replace(
+                hour=0,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+
+            end_time = scheduled_date.replace(
+                hour=11,
+                minute=59,
+                second=59,
+                microsecond=999999
+            )
+
+            jornada = "Mañana"
+
+        else:
+            start_time = scheduled_date.replace(
+                hour=12,
+                minute=0,
+                second=0,
+                microsecond=0
+            )
+
+            end_time = scheduled_date.replace(
+                hour=23,
+                minute=59,
+                second=59,
+                microsecond=999999
+            )
+
+            jornada = "Tarde"
+
+        # -----------------------------------------
+        # BUSCAR TRABAJOS OCUPADOS
+        # -----------------------------------------
+
+        occupied_works = (
+            db.query(Work)
+            .filter(
+                Work.scheduled_date >= start_time,
+                Work.scheduled_date <= end_time,
+                Work.is_active == True,
+                Work.status.in_([
+                    "Programado",
+                    "En proceso"
+                ])
+            )
+            .all()
+        )
+
+        # -----------------------------------------
+        # OBTENER ENCARGADOS OCUPADOS
+        # -----------------------------------------
+
+        occupied_names = {
+            work.assigned_to
+            for work in occupied_works
+            if work.assigned_to
+        }
+
+        # -----------------------------------------
+        # RESPUESTA
+        # -----------------------------------------
+
+        return {
+            "scheduled_date": scheduled_date,
+            "jornada": jornada,
+            "encargados": [
+                {
+                    "name": name,
+                    "available": name not in occupied_names
+                }
+                for name in ENCARGADOS
+            ],
+            "available_count": sum(
+                name not in occupied_names
+                for name in ENCARGADOS
+            )
+        }
 
     finally:
         db.close()
